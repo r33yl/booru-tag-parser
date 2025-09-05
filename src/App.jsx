@@ -41,7 +41,7 @@ function App() {
 
         <button
           className="fixed bottom-1 left-1 w-14 h-14"
-          style={{ background: "url(/logo512.png)", backgroundSize: "contain" }}
+          style={{ background: "url(./logo512.png)", backgroundSize: "contain" }}
           onClick={() => window.open("https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=43s", "_blank")}
         />
       </div>

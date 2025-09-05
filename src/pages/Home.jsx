@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Search, Copy, LoaderCircle } from "lucide-react";
+import { Search, LoaderCircle, Copy, Eye } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
 
 import { colors } from "../config/colors";
@@ -41,8 +41,6 @@ export default function Home() {
         contentOfficial: true,
     });
 
-    const tagNoneSelected = !Object.values(tagTypes).some(v => v);
-
     const getActiveTagTypes = () => {
         let optional = [];
         if (lastHostName && optionalTagTypesBySite[lastHostName]) {
@@ -50,6 +48,11 @@ export default function Home() {
         }
         return [...standardTagTypes, ...optional];
     };
+
+    const allTagsSelected = tags.filter(tag => tagTypes[tag.type] !== false).length === tags.length;
+    const tagNoneSelected = !(getActiveTagTypes()
+        .filter(tag => tag.key !== "error")
+        .some(tag => tagTypes[tag.key]));
 
     useEffect(() => {
         function handleClickOutside(event) {
@@ -97,6 +100,10 @@ export default function Home() {
         setColorTags(prev => !prev);
     };
 
+    const enableAllTagTypes = () => {
+        setTagTypes(prev => Object.fromEntries(Object.keys(prev).map(key => [key, true])));
+    };
+
     const copyToClipboard = () => {
         const text = tags.map(tag => tag.name).join(separator);
         navigator.clipboard.writeText(text);
@@ -134,7 +141,7 @@ export default function Home() {
 
     return (
         <div className={`flex flex-col justify-around ${colors.pageMotion} max-w-4xl space-y-4`}>
-            <h1 className={`text-6xl text-center pt-20 pb-8 font-semibold mx-auto ${colors.headingScaleHover} ${colors.headingMotion}`}>
+            <h1 className={`text-6xl text-center mt-20 mb-8 font-semibold mx-auto ${colors.headingScaleHover} ${colors.headingMotion}`}>
                 Booru Tag Parser
             </h1>
 
@@ -148,7 +155,7 @@ export default function Home() {
                 }}
             >
                 <input
-                    className={`w-full px-5 py-5 pr-32 text-ellipsis rounded-xl shadow-md ${colors.inputBg} ${colors.inputPlaceholder} focus:outline-none ${colors.inputFocusRing} ${colors.inputFocus} ${colors.inputFocusBorder} ${colors.inputMotion} ${colors.inputInteractive}`}
+                    className={`w-full px-5 py-5 pr-32 rounded-xl shadow-md ${colors.inputBg} ${colors.inputPlaceholder} focus:outline-none ${colors.inputFocusRing} ${colors.inputFocus} ${colors.inputFocusBorder} ${colors.inputMotion} ${colors.inputInteractive}`}
                     type="text"
                     name="booru-url"
                     autoComplete="on"
@@ -218,7 +225,7 @@ export default function Home() {
                     </button>
                 ))}
                 <input
-                    className={`w-24 px-3 py-1 rounded-lg border shadow-md ${colors.inputBg} ${colors.buttonBorderDisable} ${colors.inputPlaceholder} focus:outline-none ${colors.inputFocusRing} ${separator.length > 0 ? colors.inputFocus : colors.inputFocusError} ${colors.inputFocusBorder} ${colors.inputMotion} ${colors.inputInteractive}`}
+                    className={`w-24 px-3 py-1 rounded-lg border shadow-md ${colors.inputBg} ${colors.buttonBorderDisable} ${colors.inputPlaceholder} focus:outline-none ${colors.inputFocusRing} ${separator.length > 0 ? colors.inputFocus : colors.inputFocusError} ${colors.inputFocusBorder} ${colors.inputMotion} ${colors.buttonShadowHover} ${colors.buttonScale}`}
                     value={separator}
                     onChange={(e) => setSeparator(e.target.value)}
                     placeholder="Custom"
@@ -230,24 +237,38 @@ export default function Home() {
                 <div className="mt-4">
                     <div className="flex justify-between items-center mb-2">
                         <h2 className={`px-2 text-lg font-semibold ${colors.textMotion} hover:text-blue-400`} style={{ alignSelf: "end" }}>
-                            {(!loading && !tagNoneSelected)
+                            {!loading
                                 ? `Tags found: ${tags.length}`
                                 : "Parse tags..."}
                         </h2>
-                        <button
-                            onClick={copyToClipboard}
-                            className={`flex px-3 py-1 rounded-lg items-center gap-2 shadow-md ${colors.buttonConfirm} ${colors.buttonConfirmHover} ${colors.buttonMotion} ${colors.buttonShadowHover} ${colors.buttonScale}`}
-                        >
-                            <Copy className="h-4 w-4" />
-                            Copy
-                        </button>
+                        <div className="flex flex-row gap-2">
+                            <button
+                                disabled={allTagsSelected}
+                                onClick={enableAllTagTypes}
+                                className={`flex px-3 py-1 rounded-lg items-center gap-2 border shadow-md  ${colors.buttonMotion} ${colors.buttonShadowHover} ${colors.buttonScale} 
+                                ${!allTagsSelected
+                                        ? `${colors.buttonConfirm} ${colors.buttonConfirmHover} ${colors.buttonConfirmBorder} ${colors.buttonText}`
+                                        : `${colors.buttonBorderDisable} ${colors.buttonTextDisable}`
+                                    }`}
+                            >
+                                <Eye className="h-4 w-4" />
+                                Show All
+                            </button>
+                            <button
+                                onClick={copyToClipboard}
+                                className={`flex px-3 py-1 rounded-lg items-center gap-2 shadow-md ${colors.buttonConfirm} ${colors.buttonConfirmHover} ${colors.buttonMotion} ${colors.buttonShadowHover} ${colors.buttonScale}`}
+                            >
+                                <Copy className="h-4 w-4" />
+                                Copy
+                            </button>
+                        </div>
                     </div>
 
                     <div
                         ref={divRef}
                         className={`
                                 ${isFocus ? "outline-none ring-2 ring-blue-500" : ""}
-                                w-full h-auto px-3 py-2 rounded-xl items-start text-start shadow-md
+                                w-full h-auto min-h-10 px-3 py-2 rounded-xl items-start text-start shadow-md
                                 ${colors.inputBg} overflow-auto
                                 ${colors.inputMotion} ${colors.inputInteractive}
                               `}
@@ -270,13 +291,14 @@ export default function Home() {
                                     ))
                         }
                     </div>
-                    {log && <span className={`${colors.hintText} px-2`}>{log}</span>}
+                    <div className="flex justify-between">
+                        <span className={`${colors.hintText} px-2 ${!log ? "invisible" : ""}`}>{log}</span>
+                        <span className={`${colors.hintText} px-2 ${allTagsSelected ? "invisible" : ""}`}>
+                            {`${tags.filter(tag => tagTypes[tag.type]).length}/${tags.length}`}
+                        </span>
+                    </div>
                 </div>
             )}
-            <Toaster
-                position="bottom-center"
-                reverseOrder={false}
-            />
         </div>
     );
 }

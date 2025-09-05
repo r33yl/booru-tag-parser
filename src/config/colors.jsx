@@ -46,6 +46,7 @@ export const colors = {
 
     // ===== Buttons (confirm/positive) =====
     buttonConfirm: "bg-green-600 will-change-transform",
+    buttonConfirmBorder: "border-green-600",
     buttonConfirmHover: "hover:bg-green-500",
 
     // ===== Headings =====

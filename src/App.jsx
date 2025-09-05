@@ -6,6 +6,7 @@ import Privacy from "./pages/Privacy";
 
 import { colors } from "./config/colors";
 import AnimatedBackground from "./pages/AnimatedBackground";
+import { Toaster } from "react-hot-toast";
 
 function App() {
   return (
@@ -46,6 +47,11 @@ function App() {
           onClick={() => window.open("https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=43s", "_blank")}
         />
       </div>
+
+      <Toaster
+        position="bottom-center"
+        reverseOrder={false}
+      />
     </BrowserRouter>
   );
 }

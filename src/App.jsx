@@ -4,7 +4,7 @@ import Home from "./pages/Home";
 import Terms from "./pages/Terms";
 import Privacy from "./pages/Privacy";
 
-import { colors } from "./colors";
+import { colors } from "./config/colors";
 import AnimatedBackground from "./pages/AnimatedBackground";
 
 function App() {
@@ -21,14 +21,24 @@ function App() {
           </Routes>
         </div>
 
-        <footer className={`mt-auto text-center ${colors.secondaryText} py-4`}>
-          <a href="https://github.com/r33yl/booru-tag-parser" className={`${colors.secondaryTextHover}`}>
+        <footer
+          className={`mt-auto text-center ${colors.secondaryText} py-4 ${colors.footerMotion}`}
+        >
+          <a
+            href="https://github.com/r33yl/booru-tag-parser"
+            className={`${colors.footerLink}`}
+          >
             Source on GitHub
           </a>{" "}
-          | <Link to="/terms" className={`${colors.secondaryTextHover}`}>Terms of Use</Link>{" "}
-          | <Link to="/privacy" className={`${colors.secondaryTextHover}`}>Privacy Policy</Link>
+          |{" "}
+          <Link to="/terms" className={`${colors.footerLink}`}>
+            Terms of Use
+          </Link>{" "}
+          |{" "}
+          <Link to="/privacy" className={`${colors.footerLink}`}>
+            Privacy Policy
+          </Link>
         </footer>
-
       </div>
     </BrowserRouter>
   );

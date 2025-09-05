@@ -1,9 +1,12 @@
 
-const proxyServices = [
+const mainProxyServices = [
     "https://api.allorigins.win/get?url=",
-    "https://api.allorigins.win/raw?url=",
     "https://corsproxy.io/?",
     "https://api.codetabs.com/v1/proxy?quest=",
+];
+
+const otherProxyServices = [
+    "https://api.allorigins.win/raw?url=",
     "https://api.codetabs.com/v1/tmp/?quest=",
 
     "https://yacdn.org/proxy/", // ¯\_(ツ)_/¯
@@ -34,49 +37,72 @@ let lastRequestUrl = null;
 let lastRequestResult = null;
 let lastRequestTime = 0;
 const REQUEST_DELAY = 5000;
+const TIMEOUT_MS = 7000; // таймаут на каждый fetch
 
-export async function fetchHtml(url) {
+async function fetchWithTimeout(url, timeout = TIMEOUT_MS) {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), timeout);
+
+    try {
+        return await fetch(url, { signal: controller.signal });
+    } finally {
+        clearTimeout(id);
+    }
+}
+
+export async function fetchHtml(url, logger = () => { }) {
     const now = Date.now();
 
+    // Используем кэш, если запрос повторный
     if (url === lastRequestUrl && now - lastRequestTime < REQUEST_DELAY) {
-        console.log("Using cached response");
+        logger("Using cached response");
         return lastRequestResult;
     }
 
     lastRequestUrl = url;
     lastRequestTime = now;
 
+    const allProxies = [...mainProxyServices, ...otherProxyServices];
     let lastError = null;
 
-    for (const proxy of proxyServices) {
+    for (let i = 0; i < allProxies.length; i += 3) { // гонка по 3 прокси одновременно
+        const batch = allProxies.slice(i, i + 3);
+        logger(`Trying proxies ${i + 1}-${i + batch.length}...`);
+
         try {
-            const response = await fetch(proxy + encodeURIComponent(url));
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const responses = await Promise.race(
+                batch.map(async (proxy, idx) => {
+                    logger(`Connecting via proxy ${proxy}...`);
+                    const res = await fetchWithTimeout(proxy + encodeURIComponent(url));
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                    const contentType = res.headers.get("content-type") || "";
+                    let htmlString;
+                    if (contentType.includes("application/json")) {
+                        const data = await res.json();
+                        htmlString = data.contents ?? "";
+                    } else {
+                        htmlString = await res.text();
+                    }
+                    return htmlString;
+                })
+            );
 
-            const contentType = response.headers.get("content-type") || "";
-            let htmlString;
-
-            if (contentType.includes("application/json")) {
-                const data = await response.json();
-                htmlString = data.contents ?? "";
-            } else {
-                htmlString = await response.text();
-            }
-
+            logger("HTML fetched, parsing...");
             const parser = new DOMParser();
-            const doc = parser.parseFromString(htmlString, "text/html");
+            const doc = parser.parseFromString(responses, "text/html");
 
             lastRequestResult = doc;
             return doc;
         } catch (err) {
-            console.warn(`Proxy ${proxy} failed:`, err.message);
+            logger(`Batch failed: ${err.message}`);
             lastError = err;
+            // продолжаем к следующей пачке прокси
         }
     }
 
+    logger("All proxies failed ;(");
     throw new Error(`All proxies failed: ${lastError}`);
 }
-
 
 
 function kebabToCamel(str) {

@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Link } from "react-router-dom";
+import { HashRouter, Routes, Route, Link } from "react-router-dom";
 
 import Home from "./pages/Home";
 import Terms from "./pages/Terms";
@@ -10,7 +10,7 @@ import { Toaster } from "react-hot-toast";
 
 function App() {
   return (
-    <BrowserRouter>
+    <HashRouter>
       <div className={`flex flex-col min-h-screen relative z-10 ${colors.bg} ${colors.text}`}>
         <AnimatedBackground />
 
@@ -30,12 +30,10 @@ function App() {
             className={`${colors.footerLink}`}
           >
             Source on GitHub
-          </a>{" "}
-          |{" "}
+          </a>{" | "}
           <Link to="/terms" className={`${colors.footerLink}`}>
             Terms of Use
-          </Link>{" "}
-          |{" "}
+          </Link>{" | "}
           <Link to="/privacy" className={`${colors.footerLink}`}>
             Privacy Policy
           </Link>
@@ -52,7 +50,7 @@ function App() {
         position="bottom-center"
         reverseOrder={false}
       />
-    </BrowserRouter>
+    </HashRouter>
   );
 }
 

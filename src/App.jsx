@@ -22,7 +22,7 @@ function App() {
         </div>
 
         <footer
-          className={`mt-auto text-center ${colors.secondaryText} py-4 ${colors.footerMotion}`}
+          className={`mt-auto text-center ${colors.secondaryText} py-4 px-12 ${colors.footerMotion}`}
         >
           <a
             href="https://github.com/r33yl/booru-tag-parser"
@@ -39,6 +39,12 @@ function App() {
             Privacy Policy
           </Link>
         </footer>
+
+        <button
+          className="fixed bottom-1 left-1 w-14 h-14"
+          style={{ background: "url(/logo512.png)", backgroundSize: "contain" }}
+          onClick={() => window.open("https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=43s", "_blank")}
+        />
       </div>
     </BrowserRouter>
   );

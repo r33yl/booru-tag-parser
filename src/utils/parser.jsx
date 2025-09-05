@@ -53,7 +53,6 @@ async function fetchWithTimeout(url, timeout = TIMEOUT_MS) {
 export async function fetchHtml(url, logger = () => { }) {
     const now = Date.now();
 
-    // Используем кэш, если запрос повторный
     if (url === lastRequestUrl && now - lastRequestTime < REQUEST_DELAY) {
         logger("Using cached response");
         return lastRequestResult;
@@ -65,44 +64,50 @@ export async function fetchHtml(url, logger = () => { }) {
     const allProxies = [...mainProxyServices, ...otherProxyServices];
     let lastError = null;
 
-    for (let i = 0; i < allProxies.length; i += 3) { // гонка по 3 прокси одновременно
+    for (let i = 0; i < allProxies.length; i += 3) {
         const batch = allProxies.slice(i, i + 3);
         logger(`Trying proxies ${i + 1}-${i + batch.length}...`);
 
-        try {
-            const responses = await Promise.race(
-                batch.map(async (proxy, idx) => {
-                    logger(`Connecting via proxy ${proxy}...`);
-                    const res = await fetchWithTimeout(proxy + encodeURIComponent(url));
-                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                    const contentType = res.headers.get("content-type") || "";
-                    let htmlString;
-                    if (contentType.includes("application/json")) {
-                        const data = await res.json();
-                        htmlString = data.contents ?? "";
-                    } else {
-                        htmlString = await res.text();
-                    }
-                    return htmlString;
-                })
-            );
+        // создаём массив промисов, каждый промис — отдельный прокси
+        const promises = batch.map(async (proxy) => {
+            try {
+                logger(`Connecting via proxy ${proxy}...`);
+                const res = await fetchWithTimeout(proxy + encodeURIComponent(url));
+                if (!res.ok) {
+                    logger(`Proxy failed: HTTP ${res.status}`);
+                    return null;
+                }
 
+                const contentType = res.headers.get("content-type") || "";
+                if (contentType.includes("application/json")) {
+                    const data = await res.json();
+                    return data.contents ?? "";
+                } else {
+                    return await res.text();
+                }
+            } catch (err) {
+                throw new Error(`Proxy ${proxy} failed: ${err.message}`);
+            }
+        });
+
+        try {
+            const htmlString = await Promise.any(promises);
             logger("HTML fetched, parsing...");
             const parser = new DOMParser();
-            const doc = parser.parseFromString(responses, "text/html");
+            const doc = parser.parseFromString(htmlString, "text/html");
 
             lastRequestResult = doc;
             return doc;
         } catch (err) {
-            logger(`Batch failed: ${err.message}`);
+            logger(`Batch failed: ${err}`);
             lastError = err;
-            // продолжаем к следующей пачке прокси
         }
     }
 
     logger("All proxies failed ;(");
     throw new Error(`All proxies failed: ${lastError}`);
 }
+
 
 
 function kebabToCamel(str) {

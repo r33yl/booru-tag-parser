@@ -84,7 +84,10 @@ export default function Home() {
         setUrl(newUrl);
         try {
             if (newUrl) {
-                const hostname = new URL(newUrl).hostname;
+                let urlWithProtocol = (!/^https?:\/\//i.test(newUrl))
+                    ? "https://" + newUrl
+                    : newUrl;
+                const hostname = new URL(urlWithProtocol).hostname;
                 if (hostname) setLastHostName(hostname);
             }
         } catch {
@@ -126,9 +129,12 @@ export default function Home() {
         setLoading(true);
         setLog(null);
         try {
-            const doc = await fetchHtml(url, (msg) => setLog(msg));
+            let urlWithProtocol = (!/^https?:\/\//i.test(url))
+                ? "https://" + url
+                : url;
+            const doc = await fetchHtml(urlWithProtocol, (msg) => setLog(msg));
             setLog("Extracting tags...");
-            const extracted = parseTags(url, doc);
+            const extracted = parseTags(urlWithProtocol, doc);
             setTags(extracted);
         } catch (err) {
             console.error(err);

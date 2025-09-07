@@ -1,17 +1,17 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Search, LoaderCircle, Copy, Eye } from "lucide-react";
+import { Search, LoaderCircle, Copy, Eye, Clover } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
 
 import { colors } from "../config/colors";
-import { fetchHtml, parseTags } from "../utils/parser";
+import { fetchHtml, parseTags, parseUnsupportedSite } from "../utils/parser";
 import { optionalTagTypesBySite, standardTagTypes } from "../config/tagTypes";
-
 
 export default function Home() {
     const [url, setUrl] = useState("");
+    const [currentTagUrl, setCurrentTagUrl] = useState("");
     const [lastHostName, setLastHostName] = useState(null);
     const [loading, setLoading] = useState(false);
-    const [log, setLog] = useState(null);
+    const [logs, setLogs] = useState([]);
     const [separator, setSeparator] = useState(", ");
     const [tags, setTags] = useState([]);
     const [colorTags, setColorTags] = useState(false);
@@ -19,8 +19,10 @@ export default function Home() {
     const divRef = useRef(null);
     const [isFocus, setIsFocus] = useState(false);
 
+    const LOG_FADE_DURATION = 300;
+
     const [tagTypes, setTagTypes] = useState({
-        error: true,
+        errorLog: true,
         artist: true,
         character: true,
         copyright: true,
@@ -33,6 +35,7 @@ export default function Home() {
         species: true,
         invalid: true,
         lore: true,
+        error: true,
         rating: true,
         origin: true,
         oc: true,
@@ -40,6 +43,25 @@ export default function Home() {
         contentFanmade: true,
         contentOfficial: true,
     });
+
+    function addLog(msg, timeout = 5000) {
+        const id = Date.now() + Math.random();
+        setLogs(prev => [{ id, msg, visible: true }, ...prev]);
+
+        setTimeout(() => {
+            setLogs(prev => prev.map(l => l.id === id ? { ...l, visible: false } : l));
+            setTimeout(() => {
+                setLogs(prev => prev.filter(l => l.id !== id));
+            }, LOG_FADE_DURATION);
+        }, timeout);
+    }
+
+    function clearLogs(delay = 1000) {
+        setTimeout(() => {
+            setLogs(prev => prev.map(l => ({ ...l, visible: false })));
+            setTimeout(() => setLogs([]), LOG_FADE_DURATION);
+        }, delay);
+    }
 
     const getActiveTagTypes = () => {
         let optional = [];
@@ -125,23 +147,47 @@ export default function Home() {
     };
 
     async function fetchTags() {
+        if (loading) return;
         if (!url) return;
         setLoading(true);
-        setLog(null);
+        setCurrentTagUrl(url);
+        setTags([]);
+        setLogs([]);
         try {
             let urlWithProtocol = (!/^https?:\/\//i.test(url))
                 ? "https://" + url
                 : url;
-            const doc = await fetchHtml(urlWithProtocol, (msg) => setLog(msg));
-            setLog("Extracting tags...");
+            const doc = await fetchHtml(urlWithProtocol, (msg) => addLog(msg));
+            addLog("Extracting tags...");
             const extracted = parseTags(urlWithProtocol, doc);
             setTags(extracted);
+            addLog("Successfully extracted!");
+            clearLogs(500);
         } catch (err) {
             console.error(err);
-            setTags([{ name: "Error fetching tags", type: "error" }]);
+            setTags([{ name: "Error fetching tags", type: "errorLog" }]);
+            addLog("Error fetching tags");
         } finally {
             setLoading(false);
-            setLog(null);
+        }
+    }
+
+    function parseUnsupported() {
+        setLoading(true);
+        setTags([]);
+        setLogs([]);
+        try {
+            addLog("Extracting tags...");
+            const extracted = parseUnsupportedSite();
+            setTags(extracted);
+            addLog("Successfully extracted!");
+            clearLogs(500);
+        } catch (err) {
+            console.error(err);
+            setTags([{ name: "Error extracting tags", type: "errorLog" }]);
+            addLog("Error extracting tags");
+        } finally {
+            setLoading(false);
         }
     }
 
@@ -239,13 +285,18 @@ export default function Home() {
             </div>
 
             {/* Tags output */}
-            {tags.length > 0 && (
+            {((url && loading) || (url && url === currentTagUrl)) && (
                 <div className="mt-4">
                     <div className="flex justify-between items-center mb-2">
-                        <h2 className={`px-2 text-lg font-semibold ${colors.textMotion} hover:text-blue-400`} style={{ alignSelf: "end" }}>
-                            {!loading
-                                ? `Tags found: ${tags.length}`
-                                : "Parse tags..."}
+                        <h2 className={`px-3 text-lg font-semibold ${colors.textMotion} hover:text-blue-400`} style={{ alignSelf: "end" }}>
+                            {!loading ? (
+                                (tags.length > 0 && tags.every(tag => tag.type !== "errorLog"))
+                                    ? `✔️ Tags found: ${tags.length}`
+                                    : `❌ ${tags[0].name}`
+                            ) : (
+                                "Parse tags..."
+                            )}
+
                         </h2>
                         <div className="flex flex-row gap-2">
                             <button
@@ -270,41 +321,69 @@ export default function Home() {
                         </div>
                     </div>
 
-                    <div
-                        ref={divRef}
-                        className={`
+                    <div className="relative">
+                        <div
+                            ref={divRef}
+                            className={`
                                 ${isFocus ? "outline-none ring-2 ring-blue-500" : ""}
-                                w-full h-auto min-h-10 px-3 py-2 rounded-xl items-start text-start shadow-md
+                                w-full h-auto min-h-14 px-3 py-2 rounded-xl items-start text-start shadow-md
                                 ${colors.inputBg} overflow-auto
                                 ${colors.inputMotion} ${colors.inputInteractive}
+                                ${tags.length > 0 && tags[0].meta === "Unknown site" && "pr-40"}
                               `}
-                        style={{ cursor: "text" }}
-                        onMouseDown={() => setIsFocus(true)}
-                    >
-                        {loading
-                            ? <span>Loading...</span>
-                            : tagNoneSelected
-                                ? <span>Tag type none selected</span>
-                                : tags
-                                    .filter(tag => tagTypes[tag.type] !== false)
-                                    .map((tag, idx) => (
-                                        <React.Fragment key={`tag-${idx}`}>
-                                            <span className={`${tag.type === "error" ? "underline text-red-600" : (colorTags ? getTagTextDecorationClass(tag.type) : "")} ${colors.textMotion} ${colors.textHoverBright}`}>
-                                                {tag.name}
-                                            </span>
-                                            <span>{idx < tags.length - 1 ? separator : ""} </span>
-                                        </React.Fragment>
-                                    ))
+                            style={{ cursor: "text" }}
+                            onMouseDown={() => setIsFocus(true)}
+                        >
+                            {loading
+                                ? <span>Loading...</span>
+                                : tagNoneSelected
+                                    ? <span>Tag type none selected</span>
+                                    : tags
+                                        .filter(tag => tagTypes[tag.type] !== false)
+                                        .map((tag, idx) => (
+                                            <React.Fragment key={`tag-${idx}`}>
+                                                <span className={`${tag.type === "errorLog" ? "underline text-red-600" : (colorTags ? getTagTextDecorationClass(tag.type) : "")} ${colors.textMotion} ${colors.textHoverBright}`}>
+                                                    {tag.name}
+                                                </span>
+                                                <span>{idx < tags.length - 1 ? separator : ""} </span>
+                                            </React.Fragment>
+                                        ))
+                            }
+                        </div>
+                        {tags.length > 0 && tags[0].meta === "Unknown site" &&
+                            <button
+                                className={`absolute max-h-10 right-2 top-2 bottom-2 place-content-center ${colors.button} ${colors.buttonHover} ${colors.buttonText} font-medium px-4 rounded-xl shadow-md flex items-center gap-2 ${colors.buttonMotion} ${colors.buttonShadowHover} ${colors.buttonScale}`}
+                                onClick={parseUnsupported}
+                            >
+                                {loading
+                                    ? <LoaderCircle className="h-7 w-7 animate-spin" />
+                                    : <>
+                                        <Clover className="h-5 w-5" />
+                                        Good luck
+                                    </>
+                                }
+                            </button>
                         }
                     </div>
+
                     <div className="flex justify-between">
-                        <span className={`${colors.hintText} px-2 ${!log ? "invisible" : ""}`}>{log}</span>
-                        <span className={`${colors.hintText} px-2 ${allTagsSelected ? "invisible" : ""}`}>
+                        <div className={`scroll-box w-full h-32 overflow-y-auto px-2 ${colors.hintText}`}>
+                            {logs.reverse().map(log => (
+                                <div
+                                    key={log.id}
+                                    className={`px-1 text-sm transition-all ${log.visible ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-4"}`}
+                                    style={{ transitionDuration: `${LOG_FADE_DURATION}ms` }}
+                                >
+                                    <span key={log.id}>{log.msg}</span><br />
+                                </div>))}
+                        </div>
+                        <span className={`px-1 ${colors.hintText} ${allTagsSelected ? "hidden" : ""}`}>
                             {`${tags.filter(tag => tagTypes[tag.type]).length}/${tags.length}`}
                         </span>
                     </div>
                 </div>
-            )}
-        </div>
+            )
+            }
+        </div >
     );
 }

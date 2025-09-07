@@ -1,3 +1,4 @@
+import { parseRules } from "./parseRules";
 
 const mainProxyServices = [
     "https://api.allorigins.win/get?url=",
@@ -36,8 +37,13 @@ const otherProxyServices = [
 let lastRequestUrl = null;
 let lastRequestResult = null;
 let lastRequestTime = 0;
-const REQUEST_DELAY = 5000;
-const TIMEOUT_MS = 7000; // таймаут на каждый fetch
+let bestProxy = null;
+let bestProxyTimestamp = 0;
+
+const REQUEST_DELAY = 3000;
+const TIMEOUT_MS = 5000;
+const BATCH_SIZE = 3;
+const BEST_PROXY_LIFETIME = 5 * 60 * 1000;
 
 async function fetchWithTimeout(url, timeout = TIMEOUT_MS) {
     const controller = new AbortController();
@@ -50,10 +56,41 @@ async function fetchWithTimeout(url, timeout = TIMEOUT_MS) {
     }
 }
 
+async function fetchWithProxy(proxy, url, logger = () => { }) {
+    try {
+        logger(`Connecting via proxy ${proxy}...`);
+        const res = await fetchWithTimeout(proxy + encodeURIComponent(url));
+        if (!res.ok || res.status === 403) {
+            logger(`Proxy failed: HTTP ${res.status}`);
+            throw new Error(`Proxy failed: HTTP ${res.status}`);
+        }
+
+        const contentType = res.headers.get("content-type") || "";
+        if (contentType.includes("application/json")) {
+            const data = await res.json().catch(() => ({}));
+            return data.contents || data.html || JSON.stringify(data);
+        } else {
+            return await res.text();
+        }
+    } catch (err) {
+        throw new Error(`Proxy ${proxy} failed: ${err.message}`);
+    }
+}
+
+function parseHtml(htmlString) {
+    const parser = new DOMParser();
+    return parser.parseFromString(htmlString, "text/html");
+}
+
+function delay(ms = 100) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 export async function fetchHtml(url, logger = () => { }) {
     const now = Date.now();
 
     if (url === lastRequestUrl && now - lastRequestTime < REQUEST_DELAY) {
+        await delay(50);
         logger("Using cached response");
         return lastRequestResult;
     }
@@ -64,43 +101,49 @@ export async function fetchHtml(url, logger = () => { }) {
     const allProxies = [...mainProxyServices, ...otherProxyServices];
     let lastError = null;
 
-    for (let i = 0; i < allProxies.length; i += 3) {
-        const batch = allProxies.slice(i, i + 3);
-        logger(`Trying proxies ${i + 1}-${i + batch.length}...`);
-
-        // создаём массив промисов, каждый промис — отдельный прокси
-        const promises = batch.map(async (proxy) => {
-            try {
-                logger(`Connecting via proxy ${proxy}...`);
-                const res = await fetchWithTimeout(proxy + encodeURIComponent(url));
-                if (!res.ok) {
-                    logger(`Proxy failed: HTTP ${res.status}`);
-                    return null;
-                }
-
-                const contentType = res.headers.get("content-type") || "";
-                if (contentType.includes("application/json")) {
-                    const data = await res.json();
-                    return data.contents ?? "";
-                } else {
-                    return await res.text();
-                }
-            } catch (err) {
-                throw new Error(`Proxy ${proxy} failed: ${err.message}`);
-            }
-        });
-
+    if (bestProxy && Date.now() - bestProxyTimestamp < BEST_PROXY_LIFETIME) {
         try {
-            const htmlString = await Promise.any(promises);
-            logger("HTML fetched, parsing...");
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(htmlString, "text/html");
+            logger(`Trying best proxy: ${bestProxy}`);
+            const htmlString = await fetchWithProxy(bestProxy, url, logger);
 
+            const doc = parseHtml(htmlString);
             lastRequestResult = doc;
             return doc;
+
         } catch (err) {
-            logger(`Batch failed: ${err}`);
+            bestProxy = null;
+            if (err && err.errors) {
+                logger(`Best proxy failed, falling back to batch: ${err.errors.map(e => e.message).join("; ")}`);
+            } else {
+                logger(`Best proxy failed, falling back to batch: ${err.message}`);
+            }
             lastError = err;
+        }
+    }
+    else {
+        for (let i = 0; i < allProxies.length; i += BATCH_SIZE) {
+            const batch = allProxies.slice(i, i + BATCH_SIZE);
+            logger(`Trying proxies ${i + 1}-${i + batch.length}...`);
+
+            const promises = batch.map(proxy => fetchWithProxy(proxy, url, logger));
+
+            try {
+                const htmlString = await Promise.any(promises);
+                bestProxy = batch.find(_ => htmlString);
+                bestProxyTimestamp = Date.now();
+                logger("HTML fetched, parsing...");
+
+                const doc = parseHtml(htmlString);
+                lastRequestResult = doc;
+                return doc;
+            } catch (err) {
+                if (err && err.errors) {
+                    logger(`Batch failed: ${err.errors.map(e => e.message).join("; ")}`);
+                } else {
+                    logger(`Batch failed: ${err.message}`);
+                }
+                lastError = err;
+            }
         }
     }
 
@@ -108,246 +151,24 @@ export async function fetchHtml(url, logger = () => { }) {
     throw new Error(`All proxies failed: ${lastError}`);
 }
 
-
-
-function kebabToCamel(str) {
-    return str.replace(/-([a-z])/g, (_, char) => char.toUpperCase());
-}
-
 export function parseTags(url, doc) {
-    const rules = [
-        {
-            match: /gelbooru\.com/,
-            extract: (doc) =>
-                [...doc.querySelectorAll("li[class^='tag-type-'] a")]
-                    .filter((a) => a.getAttribute("href")?.includes("tags="))
-                    .map((a) => {
-                        const li = a.closest("li");
-                        let type = "general";
-                        if (li) {
-                            const cls = li.className;
-                            if (cls.includes("tag-type-artist")) type = "artist";
-                            else if (cls.includes("tag-type-character")) type = "character";
-                            else if (cls.includes("tag-type-copyright")) type = "copyright";
-                            else if (cls.includes("tag-type-metadata")) type = "metadata";
-                            else if (cls.includes("tag-type-deprecated")) type = "deprecated";
-                        }
-                        return { name: a.textContent.trim(), type };
-                    }).filter(Boolean),
-        },
-        {
-            match: /danbooru\.donmai\.us|sonohara\.donmai\.us|donmai\.moe/,
-            extract: (doc) =>
-                [...doc.querySelectorAll(".tag-list li")].map((li) => {
-                    const a = li.querySelector("a.search-tag");
-                    if (!a) return null;
-
-                    let type = "general";
-                    const dataDeprecated = li.getAttribute("data-is-deprecated");
-
-                    // определяем тип через data-атрибут или class
-                    const cls = li.className.toLowerCase();
-                    if (cls.includes("tag-type-1")) type = "artist";
-                    else if (cls.includes("tag-type-4")) type = "character";
-                    else if (cls.includes("tag-type-3")) type = "copyright";
-                    else if (cls.includes("tag-type-5")) type = "metadata";
-                    else if (dataDeprecated === "true") type = "deprecated";
-
-                    return { name: a.textContent.trim(), type };
-                }).filter(Boolean),
-        },
-        {
-            match: /rule34\.xxx/,
-            extract: (doc) =>
-                [...doc.querySelectorAll("#tag-sidebar li.tag")].map((li) => {
-                    const aList = li.querySelectorAll("a");
-                    if (!aList[1]) return null; // второе <a> содержит имя тега
-                    const name = aList[1].textContent.trim();
-
-                    let type = "general";
-                    const cls = li.className.toLowerCase();
-                    if (cls.includes("tag-type-artist")) type = "artist";
-                    else if (cls.includes("tag-type-character")) type = "character";
-                    else if (cls.includes("tag-type-copyright")) type = "copyright";
-                    else if (cls.includes("tag-type-metadata")) type = "metadata";
-                    else if (cls.includes("tag-type-deprecated")) type = "deprecated";
-
-                    return { name, type };
-                }).filter(Boolean),
-        },
-        {
-            match: /tbib\.org/,
-            extract: (doc) =>
-                [...doc.querySelectorAll("#tag-sidebar li.tag")].map((li) => {
-                    const a = li.querySelector("a");
-                    if (!a) return null;
-
-                    const name = a.textContent.trim();
-
-                    let type = "general";
-                    const cls = li.className.toLowerCase();
-                    if (cls.includes("tag-type-artist")) type = "artist";
-                    else if (cls.includes("tag-type-character")) type = "character";
-                    else if (cls.includes("tag-type-copyright")) type = "copyright";
-                    else if (cls.includes("tag-type-metadata")) type = "metadata";
-                    else if (cls.includes("tag-type-deprecated")) type = "deprecated";
-
-                    return { name, type };
-                }).filter(Boolean),
-        },
-        {
-            match: /yande\.re/,
-            extract: (doc) =>
-                [...doc.querySelectorAll("li[class^='tag-type-']")].map((li) => {
-                    const aList = li.querySelectorAll("a");
-                    if (!aList[1]) return null; // второе <a> содержит имя
-                    const name = aList[1].textContent.trim();
-
-                    let type = "general";
-                    const cls = li.className.toLowerCase();
-                    if (cls.includes("artist")) type = "artist";
-                    else if (cls.includes("character")) type = "character";
-                    else if (cls.includes("copyright")) type = "copyright";
-                    else if (cls.includes("metadata")) type = "metadata";
-                    else if (cls.includes("deprecated")) type = "deprecated";
-
-                    return { name, type };
-                }).filter(Boolean),
-        },
-        {
-            match: /safebooru\.org/,
-            extract: (doc) =>
-                [...doc.querySelectorAll("#tag-sidebar li.tag")].map((li) => {
-                    const aList = li.querySelectorAll("a");
-                    if (!aList[1]) return null; // второе <a> содержит имя тега
-                    const name = aList[1].textContent.trim();
-
-                    let type = "general";
-                    const cls = li.className.toLowerCase();
-                    if (cls.includes("tag-type-artist")) type = "artist";
-                    else if (cls.includes("tag-type-character")) type = "character";
-                    else if (cls.includes("tag-type-copyright")) type = "copyright";
-                    else if (cls.includes("tag-type-metadata")) type = "metadata";
-                    else if (cls.includes("tag-type-deprecated")) type = "deprecated";
-
-                    return { name, type };
-                }).filter(Boolean),
-        },
-        {
-            match: /xbooru\.com/,
-            extract: (doc) =>
-                [...doc.querySelectorAll("#tag-sidebar li.tag")].map((li) => {
-                    const aList = li.querySelectorAll("a");
-                    if (!aList[1]) return null; // второй <a> содержит имя
-                    const name = aList[1].textContent.trim();
-
-                    let type = "general";
-                    const cls = li.className.toLowerCase();
-                    if (cls.includes("artist")) type = "artist";
-                    else if (cls.includes("character")) type = "character";
-                    else if (cls.includes("copyright")) type = "copyright";
-                    else if (cls.includes("metadata")) type = "metadata";
-                    else if (cls.includes("deprecated")) type = "deprecated";
-
-                    return { name, type };
-                }).filter(Boolean),
-        },
-        {
-            match: /hypnohub\.net/,
-            extract: (doc) =>
-                [...doc.querySelectorAll("#tag-sidebar li.tag")].map((li) => {
-                    const aList = li.querySelectorAll("a");
-                    if (!aList[1]) return null; // второй <a> содержит имя тега
-                    const name = aList[1].textContent.trim();
-
-                    let type = "general";
-                    const cls = li.className.toLowerCase();
-                    if (cls.includes("artist")) type = "artist";
-                    else if (cls.includes("character")) type = "character";
-                    else if (cls.includes("copyright")) type = "copyright";
-                    else if (cls.includes("metadata")) type = "metadata";
-                    else if (cls.includes("deprecated")) type = "deprecated";
-
-                    return { name, type };
-                }).filter(Boolean),
-        },
-        {
-            match: /konachan\.com/,
-            extract: (doc) =>
-                [...doc.querySelectorAll("#tag-sidebar li.tag-link")].map((li) => {
-                    const aList = li.querySelectorAll("a");
-                    if (!aList[1]) return null; // второе <a> содержит имя тега
-                    const name = aList[1].textContent.trim();
-
-                    // тип хранится в data-type или fallback на general
-                    const type = li.getAttribute("data-type") || "general";
-
-                    return { name, type };
-                }).filter(Boolean),
-        },
-        {
-            match: /e621\.net/,
-            extract: (doc) =>
-                [...doc.querySelectorAll("ul.tag-list li.tag-list-item")].map((li) => {
-                    const nameEl = li.querySelector(".tag-list-name");
-                    if (!nameEl) return null;
-
-                    const name = nameEl.textContent.trim();
-                    const type = li.getAttribute("data-category") || "general";
-
-                    return { name, type };
-                }).filter(Boolean),
-        },
-        {
-            match: /derpibooru\.org/,
-            extract: (doc) =>
-                [...doc.querySelectorAll(".tag-list .tag.dropdown")].map((div) => {
-                    const name = div.getAttribute("data-tag-name")?.trim();
-                    const type = kebabToCamel(div.getAttribute("data-tag-category")?.trim()) || "general";
-                    if (!name) return null;
-
-                    return { name, type };
-                }).filter(Boolean),
-        },
-        {
-            match: /realbooru\.com/,
-            extract: (doc) =>
-                [...doc.querySelectorAll("#tagLink a")].map((a) => {
-                    if (!a.className) return null;
-                    const name = a.textContent.trim();
-
-                    let type = "general";
-                    const cls = a.className.toLowerCase();
-                    if (cls.includes("artist") || cls.includes("model")) type = "artist";
-                    else if (cls.includes("character")) type = "character";
-                    else if (cls.includes("copyright")) type = "copyright";
-                    else if (cls.includes("metadata")) type = "metadata";
-                    console.log(type);
-                    return { name, type };
-                }).filter(Boolean),
-        },
-        {
-            match: /rule34\.paheal\.net/,
-            extract: (doc) =>
-                [...doc.querySelectorAll("tbody tr")].map((tr) => {
-                    const a = tr.querySelector("td.tag_name_cell a.tag_name");
-                    if (!a) return null; // если нет ссылки, пропускаем
-
-                    const name = a.textContent.trim();
-                    const type = "general"; // на Paheal нет явного типа, можно потом расширить
-                    const countSpan = tr.querySelector("td.tag_count_cell span.tag_count");
-                    const count = countSpan ? parseInt(countSpan.textContent.replace(/,/g, ""), 10) : 0;
-
-                    return { name, type, count };
-                }).filter(Boolean),
-        },
-    ];
-
-    for (const rule of rules) {
+    for (const rule of parseRules) {
         if (rule.match.test(url)) {
             return rule.extract(doc);
         }
     }
 
-    return [{ name: "Unknown site or unsupported structure", type: "general" }];
+    return [{ name: "Unknown site or unsupported structure", type: "errorLog", meta: "Unknown site" }];
+}
+
+export function parseUnsupportedSite() {
+    for (const rule of parseRules) {
+        try {
+            const result = rule.extract(lastRequestResult);
+            if (result.length > 0) return result;
+        } catch (e) {
+            // Ignore errors of individual parsers
+        }
+    }
+    return [{ name: "🤷‍♂️ Couldn't figure it out, try manual parsing!", type: "errorLog" }];
 }

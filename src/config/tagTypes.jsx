@@ -19,6 +19,7 @@ export const optionalTagTypesBySite = {
         { key: "lore", label: "Lore", color: "text-lime-700", bg: "bg-lime-700", border: "border-lime-700", hover: "hover:bg-lime-600" },
     ],
     "derpibooru.org": [
+        { key: "error", label: "Error", color: "text-red-600", bg: "bg-red-600", border: "border-red-600", hover: "hover:bg-red-500" },
         { key: "rating", label: "Rating", color: "text-sky-700", bg: "bg-sky-700", border: "border-sky-700", hover: "hover:bg-sky-600" },
         { key: "origin", label: "Origin", color: "text-violet-700", bg: "bg-violet-800", border: "border-violet-800", hover: "hover:bg-violet-700" },
         { key: "oc", label: "OC", color: "text-pink-700", bg: "bg-pink-700", border: "border-pink-700", hover: "hover:bg-pink-600" },

@@ -11,7 +11,7 @@ import { Toaster } from "react-hot-toast";
 function App() {
   return (
     <HashRouter>
-      <div className={`flex flex-col min-h-screen relative z-10 ${colors.bg} ${colors.text}`}>
+      <div className={`flex flex-col min-h-screen !min-h-dvh relative z-10 ${colors.bg} ${colors.text}`}>
         <AnimatedBackground />
 
         <div className="flex-1 w-full max-w-4xl mx-auto py-12 px-6">
@@ -39,11 +39,11 @@ function App() {
           </Link>
         </footer>
 
-        <button
-          className="fixed bottom-1 left-1 w-14 h-14"
-          style={{ background: "url(./logo512.png)", backgroundSize: "contain" }}
+        {/* <button
+          className="fixed bottom-1 left-1 w-12 h-12"
+          style={{ background: `url(${process.env.PUBLIC_URL}/logo512.png)`, backgroundSize: "contain" }}
           onClick={() => window.open("https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=43s", "_blank")}
-        />
+        /> */}
       </div>
 
       <Toaster

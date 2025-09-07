@@ -1,13 +1,13 @@
 {
   "files": {
-    "main.css": "/booru-tag-parser/static/css/main.81fa95da.css",
-    "main.js": "/booru-tag-parser/static/js/main.1b252ab0.js",
+    "main.css": "/booru-tag-parser/static/css/main.7bae1ca6.css",
+    "main.js": "/booru-tag-parser/static/js/main.c0eb9fe4.js",
     "index.html": "/booru-tag-parser/index.html",
-    "main.81fa95da.css.map": "/booru-tag-parser/static/css/main.81fa95da.css.map",
-    "main.1b252ab0.js.map": "/booru-tag-parser/static/js/main.1b252ab0.js.map"
+    "main.7bae1ca6.css.map": "/booru-tag-parser/static/css/main.7bae1ca6.css.map",
+    "main.c0eb9fe4.js.map": "/booru-tag-parser/static/js/main.c0eb9fe4.js.map"
   },
   "entrypoints": [
-    "static/css/main.81fa95da.css",
-    "static/js/main.1b252ab0.js"
+    "static/css/main.7bae1ca6.css",
+    "static/js/main.c0eb9fe4.js"
   ]
 }

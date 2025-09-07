@@ -14,7 +14,7 @@ function App() {
       <div className={`flex flex-col min-h-screen !min-h-dvh relative z-10 ${colors.bg} ${colors.text}`}>
         <AnimatedBackground />
 
-        <div className="flex-1 w-full max-w-4xl mx-auto py-12 px-6">
+        <div className="flex-1 w-full max-w-4xl mx-auto py-16 px-6">
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/terms" element={<Terms />} />
@@ -23,7 +23,7 @@ function App() {
         </div>
 
         <footer
-          className={`mt-auto text-center ${colors.secondaryText} py-4 px-12 ${colors.footerMotion}`}
+          className={`mt-auto text-center ${colors.secondaryText} py-3 px-12 ${colors.footerMotion}`}
         >
           <a
             href="https://github.com/r33yl/booru-tag-parser"

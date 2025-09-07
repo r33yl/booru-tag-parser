@@ -19,7 +19,7 @@ export const colors = {
     inputFocus: "focus:ring-blue-500",
     inputFocusBorder: "focus:border-blue-500",
     inputFocusError: "ring-1 ring-red-500 focus:border-red-500",
-    inputMotion: "will-change-transform !transition-all !duration-200",
+    inputMotion: "will-change-transform transition-all !duration-200",
     inputInteractive: "hover:brightness-105 hover:shadow-md hover:scale-[1.01] active:scale-[0.99]",
 
     // #boom:hover {	

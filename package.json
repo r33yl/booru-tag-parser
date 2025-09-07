@@ -1,6 +1,6 @@
 {
   "name": "booru-tag-parser",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "homepage": "https://r33yl.github.io/booru-tag-parser",
   "private": true,
   "dependencies": {

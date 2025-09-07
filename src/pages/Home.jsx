@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Search, LoaderCircle, Copy, Eye, Clover } from "lucide-react";
-import toast, { Toaster } from "react-hot-toast";
+import { Search, LoaderCircle, Copy, Eye, Clover, X } from "lucide-react";
+import toast from "react-hot-toast";
 
 import { colors } from "../config/colors";
 import { fetchHtml, parseTags, parseUnsupportedSite } from "../utils/parser";
@@ -76,6 +76,11 @@ export default function Home() {
         .filter(tag => tag.key !== "error")
         .some(tag => tagTypes[tag.key]));
 
+    const tagCounts = tags.reduce((acc, tag) => {
+        acc[tag.type] = (acc[tag.type] || 0) + 1;
+        return acc;
+    }, {});
+
     useEffect(() => {
         function handleClickOutside(event) {
             if (divRef.current && !divRef.current.contains(event.target)) {
@@ -130,7 +135,9 @@ export default function Home() {
     };
 
     const copyToClipboard = () => {
-        const text = tags.map(tag => tag.name).join(separator);
+        const text = tags
+            .filter(tag => tagTypes[tag.type] !== false)
+            .map(tag => tag.name).join(separator);
         navigator.clipboard.writeText(text);
         toast.success('Text copied!', {
             style: {
@@ -193,7 +200,7 @@ export default function Home() {
 
     return (
         <div className={`flex flex-col justify-around ${colors.pageMotion} max-w-4xl space-y-4`}>
-            <h1 className={`text-6xl text-center mt-20 mb-8 font-semibold mx-auto ${colors.headingScaleHover} ${colors.headingMotion}`}>
+            <h1 className={`text-6xl text-center mt-16 mb-8 font-semibold mx-auto ${colors.headingScaleHover} ${colors.headingMotion}`}>
                 Booru Tag Parser
             </h1>
 
@@ -207,7 +214,7 @@ export default function Home() {
                 }}
             >
                 <input
-                    className={`w-full px-5 py-5 pr-32 rounded-xl shadow-md ${colors.inputBg} ${colors.inputPlaceholder} focus:outline-none ${colors.inputFocusRing} ${colors.inputFocus} ${colors.inputFocusBorder} ${colors.inputMotion} ${colors.inputInteractive}`}
+                    className={`w-full px-5 py-5 ${url ? "!pr-48" : "!pr-32"} rounded-xl shadow-md ${colors.inputBg} ${colors.inputPlaceholder} focus:outline-none ${colors.inputFocusRing} ${colors.inputFocus} ${colors.inputFocusBorder} ${colors.inputMotion} ${colors.inputInteractive}`}
                     type="text"
                     name="booru-url"
                     autoComplete="on"
@@ -215,18 +222,29 @@ export default function Home() {
                     value={url}
                     onChange={(e) => handleUrlChange(e.target.value)}
                 />
-                <button
-                    type="submit"
-                    className={`absolute right-2 top-2 bottom-2 min-w-28 place-content-center ${colors.button} ${colors.buttonHover} ${colors.buttonText} font-medium px-4 rounded-xl shadow-md flex items-center gap-2 ${colors.buttonMotion} ${colors.buttonShadowHover} ${colors.buttonScale}`}
-                >
-                    {loading
-                        ? <LoaderCircle className="h-7 w-7 animate-spin" />
-                        : <>
-                            <Search className="h-5 w-5" />
-                            Parse
-                        </>
-                    }
-                </button>
+                <div className={`flex absolute right-2 top-2 bottom-2 gap-2`}>
+                    {url && (
+                        <button
+                            onClick={() => setUrl("")}
+                            className={`flex items-center ${colors.button} ${colors.buttonHover} ${colors.buttonText} font-medium px-3 rounded-xl shadow-md ${colors.buttonMotion} ${colors.buttonShadowHover} ${colors.buttonScale}`}
+                        >
+                            <X />
+                        </button>
+                    )}
+
+                    <button
+                        type="submit"
+                        className={`flex min-w-28 items-center place-content-center ${colors.button} ${colors.buttonHover} ${colors.buttonText} font-medium px-4 rounded-xl shadow-md gap-2 ${colors.buttonMotion} ${colors.buttonShadowHover} ${colors.buttonScale}`}
+                    >
+                        {loading
+                            ? <LoaderCircle className="h-7 w-7 animate-spin" />
+                            : <>
+                                <Search className="h-5 w-5" />
+                                Parse
+                            </>
+                        }
+                    </button>
+                </div>
             </form>
 
             {/* Tag type toggles */}
@@ -245,6 +263,15 @@ export default function Home() {
                                 }`}
                         >
                             <span className="will-change-transform">{type.label}</span>
+                            {((url && loading) || (url && url === currentTagUrl)) && (
+                                (tagCounts[type.key] && tagCounts[type.key] > 0) && (
+                                    <div
+                                        className="absolute -top-2 -right-2 shadow-md bg-red-500 text-white text-xs px-2 py-0.5 rounded-full"
+                                    >
+                                        {tagCounts[type.key] || 0}
+                                    </div>
+                                )
+                            )}
                         </button>
                     </React.Fragment>
                 ))}
@@ -291,8 +318,8 @@ export default function Home() {
                         <h2 className={`px-3 text-lg font-semibold ${colors.textMotion} hover:text-blue-400`} style={{ alignSelf: "end" }}>
                             {!loading ? (
                                 (tags.length > 0 && tags.every(tag => tag.type !== "errorLog"))
-                                    ? `✔️ Tags found: ${tags.length}`
-                                    : `❌ ${tags[0].name}`
+                                    ? `Tags found: ${tags.length}`
+                                    : `❌ ${tags[0]?.name}`
                             ) : (
                                 "Parse tags..."
                             )}
@@ -302,7 +329,7 @@ export default function Home() {
                             <button
                                 disabled={allTagsSelected}
                                 onClick={enableAllTagTypes}
-                                className={`flex px-3 py-1 rounded-lg items-center gap-2 border shadow-md  ${colors.buttonMotion} ${colors.buttonShadowHover} ${colors.buttonScale} 
+                                className={`flex px-3 py-1 rounded-lg items-center gap-2 border shadow-md ${colors.buttonMotion} ${colors.buttonShadowHover} ${colors.buttonScale} 
                                 ${!allTagsSelected
                                         ? `${colors.buttonConfirm} ${colors.buttonConfirmHover} ${colors.buttonConfirmBorder} ${colors.buttonText}`
                                         : `${colors.buttonBorderDisable} ${colors.buttonTextDisable}`
@@ -313,7 +340,12 @@ export default function Home() {
                             </button>
                             <button
                                 onClick={copyToClipboard}
-                                className={`flex px-3 py-1 rounded-lg items-center gap-2 shadow-md ${colors.buttonConfirm} ${colors.buttonConfirmHover} ${colors.buttonMotion} ${colors.buttonShadowHover} ${colors.buttonScale}`}
+                                className={`flex px-3 py-1 rounded-lg items-center gap-2 border shadow-md ${colors.buttonMotion} ${colors.buttonShadowHover} ${colors.buttonScale}
+                                  ${tags.filter(tag => tagTypes[tag.type] !== false).length > 0
+                                        ? `${colors.buttonConfirm} ${colors.buttonConfirmHover} ${colors.buttonConfirmBorder} ${colors.buttonText}`
+                                        : `${colors.buttonBorderDisable} ${colors.buttonTextDisable}`
+                                    }
+                                `}
                             >
                                 <Copy className="h-4 w-4" />
                                 Copy
@@ -345,7 +377,7 @@ export default function Home() {
                                                 <span className={`${tag.type === "errorLog" ? "underline text-red-600" : (colorTags ? getTagTextDecorationClass(tag.type) : "")} ${colors.textMotion} ${colors.textHoverBright}`}>
                                                     {tag.name}
                                                 </span>
-                                                <span>{idx < tags.length - 1 ? separator : ""} </span>
+                                                <span>{idx < tags.filter(tag => tagTypes[tag.type] !== false).length - 1 ? separator : ""} </span>
                                             </React.Fragment>
                                         ))
                             }
@@ -365,25 +397,25 @@ export default function Home() {
                             </button>
                         }
                     </div>
-
-                    <div className="flex justify-between">
-                        <div className={`scroll-box w-full h-32 overflow-y-auto px-2 ${colors.hintText}`}>
-                            {logs.reverse().map(log => (
-                                <div
-                                    key={log.id}
-                                    className={`px-1 text-sm transition-all ${log.visible ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-4"}`}
-                                    style={{ transitionDuration: `${LOG_FADE_DURATION}ms` }}
-                                >
-                                    <span key={log.id}>{log.msg}</span><br />
-                                </div>))}
+                    {logs.length > 0 && (
+                        <div className="flex justify-between">
+                            <div className={`scroll-box w-full h-32 overflow-y-auto px-2 ${colors.hintText}`}>
+                                {logs.reverse().map(log => (
+                                    <div
+                                        key={log.id}
+                                        className={`px-1 text-sm transition-all ${log.visible ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-4"}`}
+                                        style={{ transitionDuration: `${LOG_FADE_DURATION}ms` }}
+                                    >
+                                        <span key={log.id}>{log.msg}</span><br />
+                                    </div>))}
+                            </div>
+                            <span className={`px-1 ${colors.hintText} ${allTagsSelected ? "hidden" : ""}`}>
+                                {`${tags.filter(tag => tagTypes[tag.type]).length}/${tags.length}`}
+                            </span>
                         </div>
-                        <span className={`px-1 ${colors.hintText} ${allTagsSelected ? "hidden" : ""}`}>
-                            {`${tags.filter(tag => tagTypes[tag.type]).length}/${tags.length}`}
-                        </span>
-                    </div>
+                    )}
                 </div>
-            )
-            }
+            )}
         </div >
     );
 }
